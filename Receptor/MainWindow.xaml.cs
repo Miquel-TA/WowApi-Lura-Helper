@@ -82,7 +82,6 @@ namespace ListenerApp
                 }
                 catch (Exception)
                 {
-                    // Wait before attempting to reconnect
                     await Task.Delay(2000);
                 }
             }
