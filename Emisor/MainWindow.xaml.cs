@@ -19,7 +19,7 @@ namespace EmisorApp
         private ClientWebSocket _ws = new ClientWebSocket();
         private readonly SpeechRecognitionEngine _recognizer;
 
-        private const string WsUrl = "wss://wowapi-lura.rinconplacas.com/ws"; // Adjust for your SSL/ws scheme
+        private const string WsUrl = "wss://wowapi-lura.rinconplacas.com/ws";
         private readonly string[] _keywords = new[] { "té", "círculo", "triángulo", "equis", "rombo", "borrar" };
 
         public MainWindow()
@@ -127,7 +127,7 @@ namespace EmisorApp
 
             try
             {
-                await ConnectWebSocketAsync(); // Ensure connected
+                await ConnectWebSocketAsync();
 
                 if (_ws.State == WebSocketState.Open)
                 {

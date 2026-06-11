@@ -23,7 +23,7 @@ app.Map("/ws", async context =>
     var id = Guid.NewGuid();
     connections.TryAdd(id, ws);
 
-    // Send current state immediately upon connection
+
     var initialMsg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(_currentKeywords));
     await ws.SendAsync(new ArraySegment<byte>(initialMsg), WebSocketMessageType.Text, true, CancellationToken.None);
 
@@ -45,7 +45,7 @@ app.Map("/ws", async context =>
             Console.WriteLine($"[{DateTime.Now.ToLongTimeString()}] Broadcast: [{string.Join(", ", _currentKeywords)}]");
             Console.ResetColor();
 
-            // Broadcast to all other connected clients
+
             var broadcastMsg = Encoding.UTF8.GetBytes(message);
             foreach (var client in connections)
             {
