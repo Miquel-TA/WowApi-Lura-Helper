@@ -53,11 +53,12 @@ namespace ListenerApp
 
         private async void Timer_Tick(object sender, EventArgs e)
         {
+            _timer.Stop();
+
             try
             {
-                var response = await _http.GetStringAsync("https://localhost:7007/read");
+                var response = await _http.GetStringAsync("https://wowapi-lura.rinconplacas.com/read");
 
-                // Solo repintar la UI si el estado de las palabras ha cambiado
                 if (response != _lastWordsState)
                 {
                     _lastWordsState = response;
@@ -68,18 +69,37 @@ namespace ListenerApp
                 }
             }
             catch { /* Ignorar errores de red */ }
+            finally
+            {
+                _timer.Start();
+            }
         }
 
         private void UpdateUI(List<string> words)
         {
-            // Eliminar emojis anteriores
             foreach (var element in _symbolElements)
             {
                 MainCanvas.Children.Remove(element);
             }
             _symbolElements.Clear();
 
-            // Dibujar nuevos emojis con estado de reposo (Opacidad baja)
+
+            if (words.Count > 0)
+            {
+                BackgroundPanel.Opacity = 0.85;
+                BossCircle.Opacity = 1.0;
+                BossGlow.BlurRadius = 30;
+                BossGlow.Opacity = 0.8;
+            }
+            else
+            {
+                BackgroundPanel.Opacity = 0.1;
+                BossCircle.Opacity = 0.2;
+                BossGlow.BlurRadius = 15;
+                BossGlow.Opacity = 0.3;
+            }
+
+
             for (int i = 0; i < words.Count && i < 5; i++)
             {
                 string word = words[i].ToLower();
@@ -94,8 +114,8 @@ namespace ListenerApp
                         FontFamily = new FontFamily(fontFamily),
                         FontWeight = FontWeights.Bold,
                         Foreground = Brushes.White,
-                        Opacity = 0.4, // Modo apagado por defecto
-                        Effect = new DropShadowEffect { Color = Colors.White, BlurRadius = 10, ShadowDepth = 0, Opacity = 1 }
+                        Opacity = 0.9,
+                        Effect = new DropShadowEffect { Color = Colors.White, BlurRadius = 15, ShadowDepth = 0, Opacity = 1 }
                     };
 
                     Canvas.SetLeft(textBlock, _pentagonPoints[i].X - 21);
@@ -126,6 +146,7 @@ namespace ListenerApp
             _ttsCts = new CancellationTokenSource();
             var token = _ttsCts.Token;
             string sentence = string.Join(", ", words);
+            _synth.Rate = 2;
 
             int repetitions = 0;
 
@@ -140,7 +161,7 @@ namespace ListenerApp
 
                     repetitions++;
 
-                    if (repetitions < 3)
+                    if (repetitions < 2)
                     {
                         await Task.Delay(1000, token);
                     }
@@ -162,11 +183,12 @@ namespace ListenerApp
             if (index >= _symbolElements.Count) return;
 
             var element = _symbolElements[index];
-            element.Opacity = isHighlighted ? 1.0 : 0.4;
+
+            element.Opacity = isHighlighted ? 1.0 : 0.9;
 
             if (element.Effect is DropShadowEffect shadow)
             {
-                shadow.BlurRadius = isHighlighted ? 35 : 10;
+                shadow.BlurRadius = isHighlighted ? 40 : 15;
             }
         }
 
@@ -175,7 +197,7 @@ namespace ListenerApp
             if (_ttsCts != null)
             {
                 _ttsCts.Cancel();
-                _synth.SpeakAsyncCancelAll(); // Detener el audio en curso de inmediato
+                _synth.SpeakAsyncCancelAll();
             }
         }
 
@@ -183,7 +205,6 @@ namespace ListenerApp
         {
             TtsButton.Content = TtsButton.IsChecked == true ? "🔊" : "🔇";
 
-            // Reevaluar el estado actual de la lista para arrancar o parar la voz
             var words = JsonSerializer.Deserialize<List<string>>(_lastWordsState ?? "[]") ?? new List<string>();
             ManageTtsState(words);
         }
@@ -217,6 +238,14 @@ namespace ListenerApp
             {
                 for (int i = 0; i < _symbolElements.Count; i++) SetSymbolHighlight(i, false);
             });
+        }
+
+        private void DragHandle_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
+            {
+                this.DragMove();
+            }
         }
     }
 }

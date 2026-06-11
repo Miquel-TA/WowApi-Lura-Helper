@@ -18,7 +18,7 @@ namespace EmisorApp
         private readonly HttpClient _http = new HttpClient();
         private readonly SpeechRecognitionEngine _recognizer;
 
-        private const string Url = "https://localhost:7007/write"; // Cambiar a producción
+        private const string Url = "https://wowapi-lura.rinconplacas.com/write"; // Cambiar a producción
         private const string ApiKey = "TokenSeguro123";
         private readonly string[] _keywords = new[] { "té", "círculo", "triángulo", "equis", "rombo", "borrar" };
 
@@ -82,7 +82,6 @@ namespace EmisorApp
             _timer.Stop();
             _timer.Start();
 
-            // Lógica explícita de borrado
             if (word == "borrar")
             {
                 Log("🗑️ Borrado manual");
@@ -90,13 +89,13 @@ namespace EmisorApp
                 return;
             }
 
-            // Ignorar si el símbolo ya existe o si ya hay 5 símbolos
             if (_words.Contains(word) || _words.Count >= 5)
             {
                 return;
             }
 
             _words.Add(word);
+            UpdateButtonStates();
             await SendStateAsync();
         }
 
@@ -104,6 +103,7 @@ namespace EmisorApp
         {
             _timer.Stop();
             _words.Clear();
+            UpdateButtonStates();
             await SendStateAsync();
         }
 
@@ -145,6 +145,26 @@ namespace EmisorApp
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
+        }
+
+        private void UpdateButtonStates()
+        {
+            foreach (var child in ButtonsPanel.Children)
+            {
+                if (child is Button btn && btn.Tag is string tag)
+                {
+                    if (tag == "borrar") continue;
+
+                    btn.IsEnabled = !_words.Contains(tag);
+                }
+            }
+        }
+        private void DragHandle_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
+            {
+                this.DragMove();
+            }
         }
     }
 }
