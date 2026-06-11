@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net.Http;
+using System.Net.WebSockets;
 using System.Speech.Synthesis;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,15 +10,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
-using System.Windows.Threading;
 
 namespace ListenerApp
 {
     public partial class MainWindow : Window
     {
-        private readonly HttpClient _http = new HttpClient();
-        private readonly DispatcherTimer _timer = new DispatcherTimer();
+        private ClientWebSocket _ws;
         private readonly SpeechSynthesizer _synth = new SpeechSynthesizer();
+        private const string WsUrl = "wss://wowapi-lura.rinconplacas.com/ws";
 
         private string _lastWordsState = string.Empty;
         private CancellationTokenSource _ttsCts;
@@ -42,36 +42,49 @@ namespace ListenerApp
 
             _synth.SetOutputToDefaultAudioDevice();
             _synth.Rate = 2;
-
             _synth.SpeakProgress += Synth_SpeakProgress;
             _synth.SpeakCompleted += Synth_SpeakCompleted;
 
-            _timer.Interval = TimeSpan.FromMilliseconds(250);
-            _timer.Tick += Timer_Tick;
-            _timer.Start();
+            _ = StartWebSocketListenerAsync();
         }
 
-        private async void Timer_Tick(object sender, EventArgs e)
+        private async Task StartWebSocketListenerAsync()
         {
-            _timer.Stop();
-
-            try
+            while (true)
             {
-                var response = await _http.GetStringAsync("https://wowapi-lura.rinconplacas.com/read");
-
-                if (response != _lastWordsState)
+                try
                 {
-                    _lastWordsState = response;
-                    var words = JsonSerializer.Deserialize<List<string>>(response) ?? new List<string>();
+                    _ws = new ClientWebSocket();
+                    await _ws.ConnectAsync(new Uri(WsUrl), CancellationToken.None);
 
-                    UpdateUI(words);
-                    ManageTtsState(words);
+                    var buffer = new byte[1024 * 4];
+
+                    while (_ws.State == WebSocketState.Open)
+                    {
+                        var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+
+                        if (result.MessageType == WebSocketMessageType.Close) break;
+
+                        string response = Encoding.UTF8.GetString(buffer, 0, result.Count);
+
+                        if (response != _lastWordsState)
+                        {
+                            _lastWordsState = response;
+                            var words = JsonSerializer.Deserialize<List<string>>(response) ?? new List<string>();
+
+                            Dispatcher.Invoke(() =>
+                            {
+                                UpdateUI(words);
+                                ManageTtsState(words);
+                            });
+                        }
+                    }
                 }
-            }
-            catch { /* Ignorar errores de red */ }
-            finally
-            {
-                _timer.Start();
+                catch (Exception)
+                {
+                    // Wait before attempting to reconnect
+                    await Task.Delay(2000);
+                }
             }
         }
 
@@ -82,7 +95,6 @@ namespace ListenerApp
                 MainCanvas.Children.Remove(element);
             }
             _symbolElements.Clear();
-
 
             if (words.Count > 0)
             {
@@ -98,7 +110,6 @@ namespace ListenerApp
                 BossGlow.BlurRadius = 15;
                 BossGlow.Opacity = 0.3;
             }
-
 
             for (int i = 0; i < words.Count && i < 5; i++)
             {
@@ -130,13 +141,9 @@ namespace ListenerApp
         private void ManageTtsState(List<string> words)
         {
             if (words.Count == 5 && TtsButton.IsChecked == true)
-            {
                 StartTtsLoop(words);
-            }
             else
-            {
                 StopTtsLoop();
-            }
         }
 
         private async void StartTtsLoop(List<string> words)
@@ -154,17 +161,10 @@ namespace ListenerApp
             {
                 while (!token.IsCancellationRequested && repetitions < 3)
                 {
-                    await Task.Run(() =>
-                    {
-                        _synth.Speak(sentence);
-                    }, token);
-
+                    await Task.Run(() => { _synth.Speak(sentence); }, token);
                     repetitions++;
 
-                    if (repetitions < 2)
-                    {
-                        await Task.Delay(1000, token);
-                    }
+                    if (repetitions < 2) await Task.Delay(1000, token);
                 }
             }
             catch (OperationCanceledException) { }
@@ -183,7 +183,6 @@ namespace ListenerApp
             if (index >= _symbolElements.Count) return;
 
             var element = _symbolElements[index];
-
             element.Opacity = isHighlighted ? 1.0 : 0.9;
 
             if (element.Effect is DropShadowEffect shadow)
@@ -209,9 +208,12 @@ namespace ListenerApp
             ManageTtsState(words);
         }
 
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        private async void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             StopTtsLoop();
+            if (_ws != null && _ws.State == WebSocketState.Open)
+                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+
             this.Close();
         }
 
@@ -222,13 +224,9 @@ namespace ListenerApp
                 for (int i = 0; i < _symbolElements.Count; i++) SetSymbolHighlight(i, false);
 
                 var words = JsonSerializer.Deserialize<List<string>>(_lastWordsState ?? "[]") ?? new List<string>();
-
                 int index = words.FindIndex(w => w.Equals(e.Text, StringComparison.OrdinalIgnoreCase));
 
-                if (index >= 0)
-                {
-                    SetSymbolHighlight(index, true);
-                }
+                if (index >= 0) SetSymbolHighlight(index, true);
             });
         }
 
@@ -242,10 +240,7 @@ namespace ListenerApp
 
         private void DragHandle_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
-            {
-                this.DragMove();
-            }
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left) this.DragMove();
         }
     }
 }

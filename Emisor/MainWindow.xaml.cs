@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net.Http;
+using System.Net.WebSockets;
 using System.Speech.Recognition;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,11 +16,10 @@ namespace EmisorApp
     {
         private readonly List<string> _words = new List<string>();
         private readonly DispatcherTimer _timer = new DispatcherTimer();
-        private readonly HttpClient _http = new HttpClient();
+        private ClientWebSocket _ws = new ClientWebSocket();
         private readonly SpeechRecognitionEngine _recognizer;
 
-        private const string Url = "https://wowapi-lura.rinconplacas.com/write"; // Cambiar a producción
-        private const string ApiKey = "TokenSeguro123";
+        private const string WsUrl = "wss://wowapi-lura.rinconplacas.com/ws"; // Adjust for your SSL/ws scheme
         private readonly string[] _keywords = new[] { "té", "círculo", "triángulo", "equis", "rombo", "borrar" };
 
         public MainWindow()
@@ -37,7 +37,24 @@ namespace EmisorApp
             this.Left = SystemParameters.PrimaryScreenWidth * 0.7;
             this.Top = 20;
 
+            _ = ConnectWebSocketAsync();
             Log("Sistema iniciado.");
+        }
+
+        private async Task ConnectWebSocketAsync()
+        {
+            try
+            {
+                if (_ws.State == WebSocketState.Open) return;
+
+                _ws = new ClientWebSocket();
+                await _ws.ConnectAsync(new Uri(WsUrl), CancellationToken.None);
+                Log("🔗 Conectado al servidor WebSocket.");
+            }
+            catch (Exception ex)
+            {
+                Log($"❌ Error de conexión WS: {ex.Message}");
+            }
         }
 
         private void VoiceSwitch_Click(object sender, RoutedEventArgs e)
@@ -89,10 +106,7 @@ namespace EmisorApp
                 return;
             }
 
-            if (_words.Contains(word) || _words.Count >= 5)
-            {
-                return;
-            }
+            if (_words.Contains(word) || _words.Count >= 5) return;
 
             _words.Add(word);
             UpdateButtonStates();
@@ -113,19 +127,16 @@ namespace EmisorApp
 
             try
             {
-                // Serialización explícita para .NET 4.8
-                string json = JsonSerializer.Serialize(_words);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                await ConnectWebSocketAsync(); // Ensure connected
 
-                var request = new HttpRequestMessage(HttpMethod.Post, Url) { Content = content };
-                request.Headers.Add("X-Auth-Token", ApiKey);
+                if (_ws.State == WebSocketState.Open)
+                {
+                    string json = JsonSerializer.Serialize(_words);
+                    var buffer = Encoding.UTF8.GetBytes(json);
 
-                var response = await _http.SendAsync(request);
-
-                if (response.IsSuccessStatusCode)
-                    Log($"🌐 Enviado a API: {CurrentStateText.Text}");
-                else
-                    Log($"⚠️ Error API: {response.StatusCode}");
+                    await _ws.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
+                    Log($"🌐 Enviado WS: {CurrentStateText.Text}");
+                }
             }
             catch (Exception ex)
             {
@@ -142,8 +153,11 @@ namespace EmisorApp
                 LogConsole.Items.RemoveAt(LogConsole.Items.Count - 1);
         }
 
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        private async void CloseButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_ws.State == WebSocketState.Open)
+                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Cerrando app", CancellationToken.None);
+
             this.Close();
         }
 
@@ -151,20 +165,16 @@ namespace EmisorApp
         {
             foreach (var child in ButtonsPanel.Children)
             {
-                if (child is Button btn && btn.Tag is string tag)
+                if (child is Button btn && btn.Tag is string tag && tag != "borrar")
                 {
-                    if (tag == "borrar") continue;
-
                     btn.IsEnabled = !_words.Contains(tag);
                 }
             }
         }
+
         private void DragHandle_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
-            {
-                this.DragMove();
-            }
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left) this.DragMove();
         }
     }
 }

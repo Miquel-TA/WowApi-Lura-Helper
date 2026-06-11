@@ -1,39 +1,70 @@
-using Microsoft.AspNetCore.Mvc;
+using System.Collections.Concurrent;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
 var app = builder.Build();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseWebSockets();
 
+var connections = new ConcurrentDictionary<Guid, WebSocket>();
 string[] _currentKeywords = Array.Empty<string>();
-object _stateLock = new object();
-const string ApiKey = "TokenSeguro123";
 
-app.MapGet("/read", () =>
+app.Map("/ws", async context =>
 {
-    lock (_stateLock) return Results.Ok(_currentKeywords);
-});
-
-app.MapPost("/write", ([FromHeader(Name = "X-Auth-Token")] string token, [FromBody] string[] keywords) =>
-{
-    if (token != ApiKey) return Results.Unauthorized();
-
-    lock (_stateLock)
+    if (!context.WebSockets.IsWebSocketRequest)
     {
-        _currentKeywords = keywords ?? Array.Empty<string>();
-
-        // Log en el terminal
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine($"[{(DateTime.Now).ToLongTimeString()}] Recibido y actualizado: [{string.Join(", ", _currentKeywords)}]");
-        Console.ResetColor();
+        context.Response.StatusCode = 400;
+        return;
     }
 
-    return Results.Ok();
+    using var ws = await context.WebSockets.AcceptWebSocketAsync();
+    var id = Guid.NewGuid();
+    connections.TryAdd(id, ws);
+
+    // Send current state immediately upon connection
+    var initialMsg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(_currentKeywords));
+    await ws.SendAsync(new ArraySegment<byte>(initialMsg), WebSocketMessageType.Text, true, CancellationToken.None);
+
+    var buffer = new byte[1024 * 4];
+
+    try
+    {
+        while (ws.State == WebSocketState.Open)
+        {
+            var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+
+            if (result.MessageType == WebSocketMessageType.Close)
+                break;
+
+            var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+            _currentKeywords = JsonSerializer.Deserialize<string[]>(message) ?? Array.Empty<string>();
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"[{DateTime.Now.ToLongTimeString()}] Broadcast: [{string.Join(", ", _currentKeywords)}]");
+            Console.ResetColor();
+
+            // Broadcast to all other connected clients
+            var broadcastMsg = Encoding.UTF8.GetBytes(message);
+            foreach (var client in connections)
+            {
+                if (client.Value.State == WebSocketState.Open && client.Key != id)
+                {
+                    await client.Value.SendAsync(new ArraySegment<byte>(broadcastMsg), WebSocketMessageType.Text, true, CancellationToken.None);
+                }
+            }
+        }
+    }
+    catch (WebSocketException) { /* Handle client disconnects gracefully */ }
+    finally
+    {
+        connections.TryRemove(id, out _);
+        if (ws.State != WebSocketState.Closed && ws.State != WebSocketState.Aborted)
+        {
+            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed", CancellationToken.None);
+        }
+    }
 });
 
 app.Run();
