@@ -1,0 +1,222 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Speech.Synthesis;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
+using System.Windows.Threading;
+
+namespace ListenerApp
+{
+    public partial class MainWindow : Window
+    {
+        private readonly HttpClient _http = new HttpClient();
+        private readonly DispatcherTimer _timer = new DispatcherTimer();
+        private readonly SpeechSynthesizer _synth = new SpeechSynthesizer();
+
+        private string _lastWordsState = string.Empty;
+        private CancellationTokenSource _ttsCts;
+        private readonly List<TextBlock> _symbolElements = new List<TextBlock>();
+
+        private readonly Dictionary<string, string> _emojiMap = new Dictionary<string, string>
+        {
+            {"té", "T"}, {"círculo", "🔴"}, {"triángulo", "🔺"}, {"equis", "❌"}, {"rombo", "🔷"}
+        };
+
+        private readonly Point[] _pentagonPoints = new Point[]
+        {
+            new Point(240, 50), new Point(260, 190), new Point(150, 250), new Point(40, 190), new Point(60, 50)
+        };
+
+        public MainWindow()
+        {
+            InitializeComponent();
+
+            this.Left = (SystemParameters.PrimaryScreenWidth - this.Width) / 2;
+            this.Top = 10;
+
+            _synth.SetOutputToDefaultAudioDevice();
+            _synth.Rate = 2;
+
+            _synth.SpeakProgress += Synth_SpeakProgress;
+            _synth.SpeakCompleted += Synth_SpeakCompleted;
+
+            _timer.Interval = TimeSpan.FromMilliseconds(250);
+            _timer.Tick += Timer_Tick;
+            _timer.Start();
+        }
+
+        private async void Timer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                var response = await _http.GetStringAsync("https://localhost:7007/read");
+
+                // Solo repintar la UI si el estado de las palabras ha cambiado
+                if (response != _lastWordsState)
+                {
+                    _lastWordsState = response;
+                    var words = JsonSerializer.Deserialize<List<string>>(response) ?? new List<string>();
+
+                    UpdateUI(words);
+                    ManageTtsState(words);
+                }
+            }
+            catch { /* Ignorar errores de red */ }
+        }
+
+        private void UpdateUI(List<string> words)
+        {
+            // Eliminar emojis anteriores
+            foreach (var element in _symbolElements)
+            {
+                MainCanvas.Children.Remove(element);
+            }
+            _symbolElements.Clear();
+
+            // Dibujar nuevos emojis con estado de reposo (Opacidad baja)
+            for (int i = 0; i < words.Count && i < 5; i++)
+            {
+                string word = words[i].ToLower();
+                if (_emojiMap.TryGetValue(word, out string symbol))
+                {
+                    string fontFamily = (symbol == "T") ? "Arial Black" : "Segoe UI Emoji";
+
+                    var textBlock = new TextBlock
+                    {
+                        Text = symbol,
+                        FontSize = 42,
+                        FontFamily = new FontFamily(fontFamily),
+                        FontWeight = FontWeights.Bold,
+                        Foreground = Brushes.White,
+                        Opacity = 0.4, // Modo apagado por defecto
+                        Effect = new DropShadowEffect { Color = Colors.White, BlurRadius = 10, ShadowDepth = 0, Opacity = 1 }
+                    };
+
+                    Canvas.SetLeft(textBlock, _pentagonPoints[i].X - 21);
+                    Canvas.SetTop(textBlock, _pentagonPoints[i].Y - 21);
+
+                    MainCanvas.Children.Add(textBlock);
+                    _symbolElements.Add(textBlock);
+                }
+            }
+        }
+
+        private void ManageTtsState(List<string> words)
+        {
+            if (words.Count == 5 && TtsButton.IsChecked == true)
+            {
+                StartTtsLoop(words);
+            }
+            else
+            {
+                StopTtsLoop();
+            }
+        }
+
+        private async void StartTtsLoop(List<string> words)
+        {
+            if (_ttsCts != null) return;
+
+            _ttsCts = new CancellationTokenSource();
+            var token = _ttsCts.Token;
+            string sentence = string.Join(", ", words);
+
+            int repetitions = 0;
+
+            try
+            {
+                while (!token.IsCancellationRequested && repetitions < 3)
+                {
+                    await Task.Run(() =>
+                    {
+                        _synth.Speak(sentence);
+                    }, token);
+
+                    repetitions++;
+
+                    if (repetitions < 3)
+                    {
+                        await Task.Delay(1000, token);
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                _ttsCts = null;
+                Dispatcher.Invoke(() =>
+                {
+                    for (int i = 0; i < _symbolElements.Count; i++) SetSymbolHighlight(i, false);
+                });
+            }
+        }
+
+        private void SetSymbolHighlight(int index, bool isHighlighted)
+        {
+            if (index >= _symbolElements.Count) return;
+
+            var element = _symbolElements[index];
+            element.Opacity = isHighlighted ? 1.0 : 0.4;
+
+            if (element.Effect is DropShadowEffect shadow)
+            {
+                shadow.BlurRadius = isHighlighted ? 35 : 10;
+            }
+        }
+
+        private void StopTtsLoop()
+        {
+            if (_ttsCts != null)
+            {
+                _ttsCts.Cancel();
+                _synth.SpeakAsyncCancelAll(); // Detener el audio en curso de inmediato
+            }
+        }
+
+        private void TtsButton_Click(object sender, RoutedEventArgs e)
+        {
+            TtsButton.Content = TtsButton.IsChecked == true ? "🔊" : "🔇";
+
+            // Reevaluar el estado actual de la lista para arrancar o parar la voz
+            var words = JsonSerializer.Deserialize<List<string>>(_lastWordsState ?? "[]") ?? new List<string>();
+            ManageTtsState(words);
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            StopTtsLoop();
+            this.Close();
+        }
+
+        private void Synth_SpeakProgress(object sender, SpeakProgressEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                for (int i = 0; i < _symbolElements.Count; i++) SetSymbolHighlight(i, false);
+
+                var words = JsonSerializer.Deserialize<List<string>>(_lastWordsState ?? "[]") ?? new List<string>();
+
+                int index = words.FindIndex(w => w.Equals(e.Text, StringComparison.OrdinalIgnoreCase));
+
+                if (index >= 0)
+                {
+                    SetSymbolHighlight(index, true);
+                }
+            });
+        }
+
+        private void Synth_SpeakCompleted(object sender, SpeakCompletedEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                for (int i = 0; i < _symbolElements.Count; i++) SetSymbolHighlight(i, false);
+            });
+        }
+    }
+}
