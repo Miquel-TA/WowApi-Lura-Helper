@@ -43,7 +43,7 @@
                 Background="Transparent" Click="CloseButton_Click" Panel.ZIndex="99"/>
 
         <ToggleButton x:Name="VoiceSwitch" Grid.Row="0" Margin="15,10,15,5" Padding="5,2" 
-              Width="160" Height="25" Content="🎤 Micrófono Apagado" 
+              Width="160" Height="25" Content="Micrófono OFF" 
               Foreground="White" Background="#444" 
               Cursor="Hand" Click="VoiceSwitch_Click" FontSize="12"/>
         
@@ -57,7 +57,7 @@
         </WrapPanel>
 
         <StackPanel Grid.Row="2" Margin="15,0,15,10">
-            <TextBlock Text="Estado en memoria:" Foreground="Gray" FontSize="12"/>
+            <TextBlock Text="Símbolos enviados:" Foreground="Gray" FontSize="12"/>
             <TextBlock x:Name="CurrentStateText" Text="[ Vacío ]" Foreground="#00FF00" FontSize="16" FontWeight="Bold"/>
         </StackPanel>
 

@@ -5,7 +5,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" 
         Topmost="True" ShowInTaskbar="False">
     <Grid>
-        <Ellipse x:Name="BackgroundPanel" Width="280" Height="280" Fill="#FF000000" Opacity="0.1" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Ellipse x:Name="BackgroundPanel" Width="280" Height="280" Fill="#FF000000" Opacity="0.1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
             <Ellipse.Effect>
                 <BlurEffect Radius="25"/>
             </Ellipse.Effect>
@@ -21,12 +21,12 @@
                           FontSize="14" Padding="4,-2,4,0" Cursor="Hand" IsChecked="False" 
                           Click="TtsButton_Click" Panel.ZIndex="999"/>
 
-            <Border Canvas.Left="0" Canvas.Top="0" Padding="10" Background="Transparent" 
+            <Border x:Name="DragBorder" Canvas.Left="0" Canvas.Top="0" Padding="10" Background="Transparent" 
                 Cursor="SizeAll" MouseLeftButtonDown="DragHandle_MouseDown" Panel.ZIndex="9999">
                 <TextBlock Text="✋" FontSize="18" Foreground="#AAFFFFFF" IsHitTestVisible="False"/>
             </Border>
 
-            <Border x:Name="BossCircle" Canvas.Left="95" Canvas.Top="95" Width="110" Height="110" Background="#44FF0000" CornerRadius="55" Panel.ZIndex="10" Opacity="0.2">
+            <Border x:Name="BossCircle" Canvas.Left="95" Canvas.Top="95" Width="110" Height="110" Background="#44FF0000" CornerRadius="55" Panel.ZIndex="10" Opacity="0.2" IsHitTestVisible="False">
                 <Border.Effect>
                     <DropShadowEffect x:Name="BossGlow" Color="#FF3333" BlurRadius="15" ShadowDepth="0" Opacity="0.3"/>
                 </Border.Effect>
