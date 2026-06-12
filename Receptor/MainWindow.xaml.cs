@@ -12,7 +12,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Threading;
 
 namespace ListenerApp
@@ -39,7 +38,6 @@ namespace ListenerApp
         private DispatcherTimer _overlayTimer;
 
         private string _channelId;
-
         private ClientWebSocket _ws;
         private readonly SpeechSynthesizer _synth = new SpeechSynthesizer();
         private const string WsUrl = "wss://localhost:7007/ws";
@@ -50,7 +48,7 @@ namespace ListenerApp
 
         private readonly Dictionary<string, string> _emojiMap = new Dictionary<string, string>
         {
-            {"té", "T"}, {"círculo", "🔴"}, {"triángulo", "🔺"}, {"equis", "❌"}, {"rombo", "🔷"}
+            {"té", "T"}, {"círculo", "🔴"}, {"triángulo", "🔻"}, {"equis", "❌"}, {"rombo", "🔷"}
         };
 
         private readonly Point[] _pentagonPoints = new Point[]
@@ -110,10 +108,8 @@ namespace ListenerApp
                         }
                     }
 
-                    if (isInteractive)
-                        MakeClickable();
-                    else
-                        MakeClickThrough();
+                    if (isInteractive) MakeClickable();
+                    else MakeClickThrough();
                 }
                 else
                 {
@@ -143,46 +139,54 @@ namespace ListenerApp
 
         private string PromptForPassword()
         {
-            string input = string.Empty;
-            var promptWindow = new Window
+            return Application.Current.Dispatcher.Invoke(() =>
             {
-                Width = 350,
-                Height = 160,
-                Title = "Autenticación",
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                Topmost = true,
-                ResizeMode = ResizeMode.NoResize,
-                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
-                Foreground = Brushes.White
-            };
+                string input = string.Empty;
+                var promptWindow = new Window
+                {
+                    Width = 350,
+                    Height = 160,
+                    Title = "Autenticación",
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                    Topmost = true,
+                    ResizeMode = ResizeMode.NoResize,
+                    Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
+                    Foreground = Brushes.White
+                };
 
-            var panel = new StackPanel { Margin = new Thickness(15) };
-            panel.Children.Add(new TextBlock { Text = "Ingresa un canal:", Foreground = Brushes.White });
-            var txtPassword = new TextBox { Margin = new Thickness(0, 10, 0, 10), Padding = new Thickness(3) };
-            panel.Children.Add(txtPassword);
-            var btnConnect = new Button { Content = "Conectar", Width = 90, HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(5) };
-            btnConnect.Click += (s, e) => { input = txtPassword.Text; promptWindow.DialogResult = true; };
-            panel.Children.Add(btnConnect);
+                var panel = new StackPanel { Margin = new Thickness(15) };
+                panel.Children.Add(new TextBlock { Text = "Ingresa un canal:", Foreground = Brushes.White });
+                var txtPassword = new TextBox { Margin = new Thickness(0, 10, 0, 10), Padding = new Thickness(3) };
+                panel.Children.Add(txtPassword);
+                var btnConnect = new Button { Content = "Conectar", Width = 90, HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(5) };
+                btnConnect.Click += (s, e) => { input = txtPassword.Text; promptWindow.DialogResult = true; };
+                panel.Children.Add(btnConnect);
 
-            promptWindow.Content = panel;
-            promptWindow.ShowDialog();
-            return input;
+                promptWindow.Content = panel;
+                promptWindow.ShowDialog();
+                return input;
+            });
         }
 
         private async Task StartWebSocketListenerAsync()
         {
             while (true)
             {
-                
                 if (string.IsNullOrEmpty(_channelId))
+                {
                     _channelId = PromptForPassword();
-                if (string.IsNullOrEmpty(_channelId)) { this.Close(); return; }
+                    if (string.IsNullOrEmpty(_channelId)) { Dispatcher.Invoke(Close); return; }
+                }
 
                 try
                 {
                     _ws = new ClientWebSocket();
                     var uri = new Uri($"{WsUrl}?token={_channelId}");
                     await _ws.ConnectAsync(uri, CancellationToken.None);
+
+                    using (var cts = new CancellationTokenSource())
+                    {
+                    var heartbeatTask = HeartbeatLoopAsync(cts.Token);
 
                     var buffer = new byte[1024 * 4];
 
@@ -192,12 +196,13 @@ namespace ListenerApp
                         if (result.MessageType == WebSocketMessageType.Close) break;
 
                         string response = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        var words = JsonSerializer.Deserialize<List<string>>(response);
 
-                        if (response != _lastWordsState)
+                        if (words != null && words.Count == 1 && words[0] == "pong") continue;
+
+                        if (response != _lastWordsState && words != null)
                         {
                             _lastWordsState = response;
-                            var words = JsonSerializer.Deserialize<List<string>>(response) ?? new List<string>();
-
                             Dispatcher.Invoke(() =>
                             {
                                 UpdateUI(words);
@@ -205,14 +210,27 @@ namespace ListenerApp
                             });
                         }
                     }
-                }
-                catch (WebSocketException ex)
-                {
-                    MessageBox.Show($"Error:\n\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    cts.Cancel();
+                    }
                 }
                 catch (Exception)
                 {
                     await Task.Delay(2000);
+                }
+                _channelId = null;
+            }
+        }
+
+        private async Task HeartbeatLoopAsync(CancellationToken token)
+        {
+            var pingMsg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[] { "ping" }));
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(10000, token);
+                if (_ws?.State == WebSocketState.Open)
+                {
+                    try { await _ws.SendAsync(new ArraySegment<byte>(pingMsg), WebSocketMessageType.Text, true, token); }
+                    catch { break; }
                 }
             }
         }
@@ -246,9 +264,8 @@ namespace ListenerApp
                         FontFamily = new FontFamily(fontFamily),
                         FontWeight = FontWeights.Bold,
                         Foreground = Brushes.White,
-                        Opacity = 0.9,
-                        IsHitTestVisible = false,
-                        Effect = new DropShadowEffect { Color = Colors.White, BlurRadius = 15, ShadowDepth = 0, Opacity = 1 }
+                        Opacity = 0.8,
+                        IsHitTestVisible = false
                     };
 
                     Canvas.SetLeft(textBlock, _pentagonPoints[i].X - 21);
@@ -257,6 +274,16 @@ namespace ListenerApp
                     _symbolElements.Add(textBlock);
                 }
             }
+        }
+
+        private void SetSymbolHighlight(int index, bool isHighlighted)
+        {
+            if (index >= _symbolElements.Count) return;
+            var element = _symbolElements[index];
+
+            element.Foreground = isHighlighted
+                ? new SolidColorBrush(Color.FromRgb(255, 180, 0))
+                : Brushes.White;
         }
 
         private void ManageTtsState(List<string> words)
@@ -289,14 +316,6 @@ namespace ListenerApp
                 _ttsCts = null;
                 Dispatcher.Invoke(() => { for (int i = 0; i < _symbolElements.Count; i++) SetSymbolHighlight(i, false); });
             }
-        }
-
-        private void SetSymbolHighlight(int index, bool isHighlighted)
-        {
-            if (index >= _symbolElements.Count) return;
-            var element = _symbolElements[index];
-            element.Opacity = isHighlighted ? 1.0 : 0.9;
-            if (element.Effect is DropShadowEffect shadow) shadow.BlurRadius = isHighlighted ? 40 : 15;
         }
 
         private void StopTtsLoop()
