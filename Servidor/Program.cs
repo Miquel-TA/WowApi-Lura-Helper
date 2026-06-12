@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +12,8 @@ app.UseWebSockets();
 var channels = new ConcurrentDictionary<string, ChannelState>();
 var _validKeywords = new HashSet<string> { "té", "círculo", "triángulo", "equis", "rombo", "borrar" };
 const int MaxPayloadSize = 2048;
+
+var _options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
 var cleanupTimer = new Timer(_ =>
 {
@@ -95,7 +98,7 @@ app.Map("/ws", async context =>
             var message = Encoding.UTF8.GetString(ms.ToArray());
             string[]? parsedInput = null;
 
-            try { parsedInput = JsonSerializer.Deserialize<string[]>(message); } catch { /* Ignore malformed JSON */ }
+            try { parsedInput = JsonSerializer.Deserialize<string[]>(message, _options); } catch { /* Ignore malformed JSON */ }
 
             if (parsedInput != null)
             {

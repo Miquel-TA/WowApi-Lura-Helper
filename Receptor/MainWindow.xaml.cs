@@ -4,6 +4,7 @@ using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Speech.Synthesis;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,6 +42,8 @@ namespace ListenerApp
         private ClientWebSocket _ws;
         private readonly SpeechSynthesizer _synth = new SpeechSynthesizer();
         private const string WsUrl = "wss://localhost:7007/ws";
+
+        JsonSerializerOptions _options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
         private string _lastWordsState = string.Empty;
         private CancellationTokenSource _ttsCts;
@@ -196,7 +199,7 @@ namespace ListenerApp
                         if (result.MessageType == WebSocketMessageType.Close) break;
 
                         string response = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        var words = JsonSerializer.Deserialize<List<string>>(response);
+                        var words = JsonSerializer.Deserialize<List<string>>(response, _options);
 
                         if (words != null && words.Count == 1 && words[0] == "pong") continue;
 
