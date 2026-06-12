@@ -46,11 +46,11 @@
               Width="160" Height="25" Content="Micrófono OFF" 
               Foreground="White" Background="#444" 
               Cursor="Hand" Click="VoiceSwitch_Click" FontSize="12"/>
-        
+
         <WrapPanel x:Name="ButtonsPanel" Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,10">
             <Button Content="T" Tag="té" Click="ManualBtn_Click" Width="45" FontFamily="Arial Black"/>
             <Button Content="🔴" Tag="círculo" Click="ManualBtn_Click" Width="45"/>
-            <Button Content="🔺" Tag="triángulo" Click="ManualBtn_Click" Width="45"/>
+            <Button Content="🔻" Tag="triángulo" Click="ManualBtn_Click" Width="45"/>
             <Button Content="❌" Tag="equis" Click="ManualBtn_Click" Width="45"/>
             <Button Content="🔷" Tag="rombo" Click="ManualBtn_Click" Width="45"/>
             <Button Content="🗑️" Tag="borrar" Click="ManualBtn_Click" Width="45" Background="#AA880000"/>
