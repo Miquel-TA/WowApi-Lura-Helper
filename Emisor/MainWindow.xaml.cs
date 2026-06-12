@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.WebSockets;
 using System.Speech.Recognition;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,6 +25,8 @@ namespace EmisorApp
 
         private const string WsUrl = "wss://localhost:7007/ws";
         private readonly string[] _keywords = new[] { "té", "círculo", "triángulo", "equis", "rombo", "borrar" };
+
+        JsonSerializerOptions _options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
         public MainWindow()
         {
@@ -221,7 +224,7 @@ namespace EmisorApp
             {
                 if (_ws != null && _ws.State == WebSocketState.Open)
                 {
-                    string json = JsonSerializer.Serialize(_words);
+                    string json = JsonSerializer.Serialize(_words, _options);
                     var buffer = Encoding.UTF8.GetBytes(json);
                     await _ws.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
                     Log($"Enviado: {CurrentStateText.Text}");
