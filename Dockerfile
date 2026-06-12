@@ -2,8 +2,8 @@
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 USER app
 WORKDIR /app
-ENV ASPNETCORE_HTTP_PORTS=8081
-EXPOSE 8081
+ENV ASPNETCORE_HTTP_PORTS=446
+EXPOSE 446
 
 # Etapa de construcción
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build

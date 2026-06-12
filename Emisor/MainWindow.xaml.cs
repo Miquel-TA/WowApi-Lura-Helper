@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace EmisorApp
@@ -19,7 +20,9 @@ namespace EmisorApp
         private ClientWebSocket _ws = new ClientWebSocket();
         private readonly SpeechRecognitionEngine _recognizer;
 
-        private const string WsUrl = "wss://wowapi-lura.rinconplacas.com/ws";
+        private string _channelId;
+
+        private const string WsUrl = "wss://localhost:7007/ws";
         private readonly string[] _keywords = new[] { "té", "círculo", "triángulo", "equis", "rombo", "borrar" };
 
         public MainWindow()
@@ -41,19 +44,58 @@ namespace EmisorApp
             Log("Sistema iniciado.");
         }
 
+        private string PromptForPassword()
+        {
+            string input = string.Empty;
+            var promptWindow = new Window
+            {
+                Width = 350,
+                Height = 160,
+                Title = "Autenticación",
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                Topmost = true,
+                ResizeMode = ResizeMode.NoResize,
+                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
+                Foreground = Brushes.White
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(15) };
+            panel.Children.Add(new TextBlock { Text = "Ingrese un canal:", Foreground = Brushes.White });
+            var txtPassword = new TextBox { Margin = new Thickness(0, 10, 0, 10), Padding = new Thickness(3) };
+            panel.Children.Add(txtPassword);
+            var btnConnect = new Button { Content = "Conectar", Width = 90, HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(5) };
+            btnConnect.Click += (s, e) => { input = txtPassword.Text; promptWindow.DialogResult = true; };
+            panel.Children.Add(btnConnect);
+
+            promptWindow.Content = panel;
+            promptWindow.ShowDialog();
+            return input;
+        }
+
         private async Task ConnectWebSocketAsync()
         {
+            if (string.IsNullOrEmpty(_channelId))
+                _channelId = PromptForPassword();
+            if (string.IsNullOrEmpty(_channelId)) { this.Close(); return; }
+
             try
             {
                 if (_ws.State == WebSocketState.Open) return;
 
                 _ws = new ClientWebSocket();
-                await _ws.ConnectAsync(new Uri(WsUrl), CancellationToken.None);
-                Log("🔗 Conectado al servidor WebSocket.");
+                var uri = new Uri($"{WsUrl}?token={_channelId}");
+                await _ws.ConnectAsync(uri, CancellationToken.None);
+
+                Log("Conectado.");
+            }
+            catch (WebSocketException ex)
+            {
+                Log($"Error: {ex.Message}");
+                MessageBox.Show($"Fallo de conexión.\n\n{ex.Message}", "Error de Conexión", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
-                Log($"❌ Error de conexión WS: {ex.Message}");
+                Log($"Error de red: {ex.Message}");
             }
         }
 
@@ -61,35 +103,31 @@ namespace EmisorApp
         {
             if (VoiceSwitch.IsChecked == true)
             {
-                VoiceSwitch.Content = "🔴 Escuchando...";
-                VoiceSwitch.Background = System.Windows.Media.Brushes.DarkRed;
+                VoiceSwitch.Content = "Escuchando...";
+                VoiceSwitch.Background = Brushes.DarkRed;
                 _recognizer.RecognizeAsync(RecognizeMode.Multiple);
-                Log("🎤 Micrófono activado.");
+                Log("Micrófono ON.");
             }
             else
             {
-                VoiceSwitch.Content = "🎤 Micrófono Apagado";
-                VoiceSwitch.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(68, 68, 68));
+                VoiceSwitch.Content = "Micrófono OFF";
+                VoiceSwitch.Background = new SolidColorBrush(Color.FromRgb(68, 68, 68));
                 _recognizer.RecognizeAsyncCancel();
-                Log("🎤 Micrófono desactivado.");
+                Log("Micrófono OFF.");
             }
         }
 
         private async void ManualBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is string word)
-            {
-                await ProcessKeywordAsync(word);
-            }
+            if (sender is Button btn && btn.Tag is string word) await ProcessKeywordAsync(word);
         }
 
         private void Recognizer_SpeechRecognized(object sender, SpeechRecognizedEventArgs e)
         {
             string word = e.Result.Text.ToLower();
-
             Application.Current.Dispatcher.Invoke(async () =>
             {
-                Log($"🗣️ Detectado: {word}");
+                Log($"Detectado: {word}");
                 await ProcessKeywordAsync(word);
             });
         }
@@ -101,7 +139,7 @@ namespace EmisorApp
 
             if (word == "borrar")
             {
-                Log("🗑️ Borrado manual");
+                Log("Borrado");
                 await ResetAndSendAsync();
                 return;
             }
@@ -135,12 +173,12 @@ namespace EmisorApp
                     var buffer = Encoding.UTF8.GetBytes(json);
 
                     await _ws.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
-                    Log($"🌐 Enviado WS: {CurrentStateText.Text}");
+                    Log($"Enviado: {CurrentStateText.Text}");
                 }
             }
             catch (Exception ex)
             {
-                Log($"❌ Error de red: {ex.Message}");
+                Log($"Error de red: {ex.Message}");
             }
         }
 
@@ -155,10 +193,33 @@ namespace EmisorApp
 
         private async void CloseButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_ws.State == WebSocketState.Open)
-                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Cerrando app", CancellationToken.None);
+            this.Hide();
 
-            this.Close();
+            try
+            {
+                _timer?.Stop();
+
+                if (_recognizer != null)
+                {
+                    _recognizer.RecognizeAsyncCancel();
+                    _recognizer.Dispose();
+                }
+
+                if (_ws != null && _ws.State == WebSocketState.Open)
+                {
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500)))
+                    {
+                        await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Cerrando app", cts.Token);
+                    }
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                Environment.Exit(0);
+            }
         }
 
         private void UpdateButtonStates()
