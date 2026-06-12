@@ -1,6 +1,6 @@
 # WoW L'ura Boss Overlay
 
-This is a custom overlay for the L'ura boss fight in World of Warcraft. It registers and broadcasts symbol callouts in real-time to all listeners so your group doesn't mess up the mechanics.
+This is a custom overlay for the L'ura boss fight in World of Warcraft. It registers and broadcasts symbol callouts in real-time to all listeners in that channel so your group doesn't mess up the mechanics.
 
 ## How it works
 
@@ -14,8 +14,8 @@ The system is split into three straightforward parts:
 
 1. Run the **Server** on a public VPS or similar and configure the port accordingly.
 2. Configure the **Emisor** and **Receptor** to point to the **Server**.
-3. Open the **Emisor** and **Receptor** and send some inputs to test the workflow.
-5. All the symbols sent with the **Emisor** will be broadcasted to all **Receptors** in miliseconds via websockets.
+3. Open the **Emisor** and **Receptor**,choose a channel and send some inputs to test the workflow.
+5. All the symbols sent with the **Emisor** will be broadcasted to all **Receptors** in that channel via websockets.
    
 ## Disclaimer
 
