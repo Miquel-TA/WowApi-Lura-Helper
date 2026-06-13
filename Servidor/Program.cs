@@ -145,7 +145,7 @@ app.Run();
 
 public class ChannelState
 {
-    public string[] Keywords { get; set; } = Array.Empty<string>();
+    public string[] Keywords { get; set; } = [];
     public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
     public ConcurrentDictionary<Guid, WebSocket> Connections { get; } = new();
 }

@@ -53,7 +53,7 @@ namespace EmisorApp
                 {
                     Width = 350,
                     Height = 160,
-                    Title = "Autenticación",
+                    Title = "WoW Api Lura Emisor",
                     WindowStartupLocation = WindowStartupLocation.CenterScreen,
                     Topmost = true,
                     ResizeMode = ResizeMode.NoResize,
@@ -62,7 +62,7 @@ namespace EmisorApp
                 };
 
                 var panel = new StackPanel { Margin = new Thickness(15) };
-                panel.Children.Add(new TextBlock { Text = "Ingrese un canal:", Foreground = Brushes.White });
+                panel.Children.Add(new TextBlock { Text = "Escoge un canal al que emitir:", Foreground = Brushes.White });
                 var txtPassword = new TextBox { Margin = new Thickness(0, 10, 0, 10), Padding = new Thickness(3) };
                 panel.Children.Add(txtPassword);
                 var btnConnect = new Button { Content = "Conectar", Width = 90, HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(5) };
