@@ -13,6 +13,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 
 namespace ListenerApp
@@ -149,7 +151,7 @@ namespace ListenerApp
                 {
                     Width = 350,
                     Height = 160,
-                    Title = "Autenticación",
+                    Title = "WoW Api Lura Receptor",
                     WindowStartupLocation = WindowStartupLocation.CenterScreen,
                     Topmost = true,
                     ResizeMode = ResizeMode.NoResize,
@@ -158,7 +160,7 @@ namespace ListenerApp
                 };
 
                 var panel = new StackPanel { Margin = new Thickness(15) };
-                panel.Children.Add(new TextBlock { Text = "Ingresa un canal:", Foreground = Brushes.White });
+                panel.Children.Add(new TextBlock { Text = "Escoge un canal al que unirte:", Foreground = Brushes.White });
                 var txtPassword = new TextBox { Margin = new Thickness(0, 10, 0, 10), Padding = new Thickness(3) };
                 panel.Children.Add(txtPassword);
                 var btnConnect = new Button { Content = "Conectar", Width = 90, HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(5) };
@@ -189,31 +191,31 @@ namespace ListenerApp
 
                     using (var cts = new CancellationTokenSource())
                     {
-                    var heartbeatTask = HeartbeatLoopAsync(cts.Token);
+                        var heartbeatTask = HeartbeatLoopAsync(cts.Token);
 
-                    var buffer = new byte[1024 * 4];
+                        var buffer = new byte[1024 * 4];
 
-                    while (_ws.State == WebSocketState.Open)
-                    {
-                        var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                        if (result.MessageType == WebSocketMessageType.Close) break;
-
-                        string response = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        var words = JsonSerializer.Deserialize<List<string>>(response, _options);
-
-                        if (words != null && words.Count == 1 && words[0] == "pong") continue;
-
-                        if (response != _lastWordsState && words != null)
+                        while (_ws.State == WebSocketState.Open)
                         {
-                            _lastWordsState = response;
-                            Dispatcher.Invoke(() =>
+                            var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                            if (result.MessageType == WebSocketMessageType.Close) break;
+
+                            string response = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                            var words = JsonSerializer.Deserialize<List<string>>(response, _options);
+
+                            if (words != null && words.Count == 1 && words[0] == "pong") continue;
+
+                            if (response != _lastWordsState && words != null)
                             {
-                                UpdateUI(words);
-                                ManageTtsState(words);
-                            });
+                                _lastWordsState = response;
+                                Dispatcher.Invoke(() =>
+                                {
+                                    UpdateUI(words);
+                                    ManageTtsState(words);
+                                });
+                            }
                         }
-                    }
-                    cts.Cancel();
+                        cts.Cancel();
                     }
                 }
                 catch (Exception)
@@ -238,20 +240,43 @@ namespace ListenerApp
             }
         }
 
+        private void AnimateOpacity(UIElement element, double targetOpacity, TimeSpan duration)
+        {
+            var animation = new DoubleAnimation
+            {
+                To = targetOpacity,
+                Duration = duration,
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+            };
+            element.BeginAnimation(UIElement.OpacityProperty, animation);
+        }
+
+        private void AnimateDropShadow(DropShadowEffect effect, double targetOpacity, double targetBlur, TimeSpan duration)
+        {
+            var opacityAnim = new DoubleAnimation { To = targetOpacity, Duration = duration };
+            var blurAnim = new DoubleAnimation { To = targetBlur, Duration = duration };
+            effect.BeginAnimation(DropShadowEffect.OpacityProperty, opacityAnim);
+            effect.BeginAnimation(DropShadowEffect.BlurRadiusProperty, blurAnim);
+        }
+
         private void UpdateUI(List<string> words)
         {
             foreach (var element in _symbolElements) MainCanvas.Children.Remove(element);
             _symbolElements.Clear();
 
+            TimeSpan animDuration = TimeSpan.FromMilliseconds(500);
+
             if (words.Count > 0)
             {
-                BackgroundPanel.Opacity = 0.85; BossCircle.Opacity = 1.0;
-                BossGlow.BlurRadius = 30; BossGlow.Opacity = 0.8;
+                AnimateOpacity(BackgroundPanel, 0.85, animDuration);
+                AnimateOpacity(BossCircle, 1.0, animDuration);
+                AnimateDropShadow(BossGlow, 0.8, 30, animDuration);
             }
             else
             {
-                BackgroundPanel.Opacity = 0.1; BossCircle.Opacity = 0.2;
-                BossGlow.BlurRadius = 15; BossGlow.Opacity = 0.3;
+                AnimateOpacity(BackgroundPanel, 0.1, animDuration);
+                AnimateOpacity(BossCircle, 0.2, animDuration);
+                AnimateDropShadow(BossGlow, 0.3, 15, animDuration);
             }
 
             for (int i = 0; i < words.Count && i < 5; i++)

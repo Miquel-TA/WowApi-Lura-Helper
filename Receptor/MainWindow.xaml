@@ -4,8 +4,65 @@
         Title="Overlay" Height="300" Width="300" 
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" 
         Topmost="True" ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BgBorder" Background="{TemplateBinding Background}" 
+                                CornerRadius="4" RenderTransformOrigin="0.5,0.5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BgBorder" Property="Background" Value="#EE555555"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BgBorder" Property="Background" Value="#FF888888"/>
+                                <Setter TargetName="BgBorder" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.92" ScaleY="0.92"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="BgBorder" Background="{TemplateBinding Background}" 
+                                CornerRadius="4" RenderTransformOrigin="0.5,0.5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BgBorder" Property="Background" Value="#EE555555"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BgBorder" Property="Background" Value="#FF888888"/>
+                                <Setter TargetName="BgBorder" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.92" ScaleY="0.92"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid>
-        <Ellipse x:Name="BackgroundPanel" Width="280" Height="280" Fill="#FF000000" Opacity="0.1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+        <Ellipse x:Name="BackgroundPanel" Width="280" Height="280" Fill="#FF000000" Opacity="0.85" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
             <Ellipse.Effect>
                 <BlurEffect Radius="25"/>
             </Ellipse.Effect>
@@ -21,14 +78,15 @@
                           FontSize="14" Padding="4,-2,4,0" Cursor="Hand" IsChecked="False" 
                           Click="TtsButton_Click" Panel.ZIndex="999"/>
 
-            <Border x:Name="DragBorder" Canvas.Left="0" Canvas.Top="0" Padding="10" Background="Transparent" 
+            <Border x:Name="DragBorder" Canvas.Left="0" Canvas.Top="0" Padding="10" 
+                Background="#01000000" 
                 Cursor="SizeAll" MouseLeftButtonDown="DragHandle_MouseDown" Panel.ZIndex="9999">
                 <TextBlock Text="✋" FontSize="18" Foreground="#AAFFFFFF" IsHitTestVisible="False"/>
             </Border>
 
-            <Border x:Name="BossCircle" Canvas.Left="95" Canvas.Top="95" Width="110" Height="110" Background="#44FF0000" CornerRadius="55" Panel.ZIndex="10" Opacity="0.2" IsHitTestVisible="False">
+            <Border x:Name="BossCircle" Canvas.Left="95" Canvas.Top="95" Width="110" Height="110" Background="#44FF0000" CornerRadius="55" Panel.ZIndex="10" Opacity="1.0" IsHitTestVisible="False">
                 <Border.Effect>
-                    <DropShadowEffect x:Name="BossGlow" Color="#FF3333" BlurRadius="15" ShadowDepth="0" Opacity="0.3"/>
+                    <DropShadowEffect x:Name="BossGlow" Color="#FF3333" BlurRadius="30" ShadowDepth="0" Opacity="0.8"/>
                 </Border.Effect>
                 <TextBlock Text="BOSS" HorizontalAlignment="Center" VerticalAlignment="Center" 
                            FontSize="24" FontWeight="Black" Foreground="#AAFFFFFF"/>
